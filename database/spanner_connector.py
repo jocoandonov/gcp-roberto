@@ -199,9 +199,6 @@ class SpannerConnector(BaseDatabaseConnector):
                 "order_line", "item", "stock"
             ]
         
-        print("📊 Getting table counts...")
-        print("-" * 40)
-        
         for table in available_tables:
             try:
                 # Create a new snapshot for each table
@@ -213,18 +210,11 @@ class SpannerConnector(BaseDatabaseConnector):
                         for row in results:
                             count = row[0] if row else 0
                             table_counts[table] = count
-                            print(f"   {table}: {count} records")
                     else:
                         table_counts[table] = 0
-                        print(f"   {table}: ❌ Query failed")
                         
             except Exception as e:
                 table_counts[table] = 0
-                print(f"   {table}: ❌ Error - {str(e)}")
-        
-        print("-" * 40)
-        total_records = sum(table_counts.values())
-        print(f"📈 Total records across all tables: {total_records}")
         
         return table_counts
 
