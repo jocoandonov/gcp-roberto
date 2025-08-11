@@ -135,21 +135,59 @@ class SpannerConnector(BaseDatabaseConnector):
                 # Convert results to list of dictionaries
                 rows = []
                 
+                # Get column names from the results metadata
+                if hasattr(results, 'fields'):
+                    column_names = [field.name for field in results.fields]
+                else:
+                    # Fallback: try to extract column names from the query
+                    # This is a simple approach - for complex queries you might need more sophisticated parsing
+                    column_names = []
+                    query_upper = query.upper()
+                    if 'SELECT' in query_upper:
+                        # Extract column names from SELECT clause
+                        select_start = query_upper.find('SELECT') + 6
+                        from_start = query_upper.find('FROM')
+                        if from_start > select_start:
+                            select_clause = query[select_start:from_start].strip()
+                            # Split by comma and extract column names
+                            for col in select_clause.split(','):
+                                col = col.strip()
+                                # Handle "column AS alias" syntax
+                                if ' AS ' in col.upper():
+                                    col = col.split(' AS ')[1].strip()
+                                # Remove table prefixes like "table.column"
+                                if '.' in col:
+                                    col = col.split('.')[-1].strip()
+                                column_names.append(col)
+                
+                # If we still don't have column names, use generic ones
+                if not column_names:
+                    column_names = [f"col_{i}" for i in range(len(results[0]) if results else 0)]
+                
                 for row in results:
                     row_dict = {}
                     # For simple queries like COUNT(*), just use the value
-                    if len(row) == 1:
-                        row_dict["count"] = row[0]
+                    if len(row) == 1 and len(column_names) == 1:
+                        row_dict[column_names[0]] = row[0]
                     else:
-                        # For multi-column queries, we'd need field names
-                        # For now, just use index-based keys
+                        # For multi-column queries, use the actual column names
                         for i, value in enumerate(row):
-                            if hasattr(value, 'isoformat'):  # datetime
-                                row_dict[f"col_{i}"] = value.isoformat()
-                            elif value is None:
-                                row_dict[f"col_{i}"] = None
+                            if i < len(column_names):
+                                col_name = column_names[i]
+                                if hasattr(value, 'isoformat'):  # datetime
+                                    row_dict[col_name] = value.isoformat()
+                                elif value is None:
+                                    row_dict[col_name] = None
+                                else:
+                                    row_dict[col_name] = value
                             else:
-                                row_dict[f"col_{i}"] = value
+                                # Fallback to generic name if we have more values than column names
+                                if hasattr(value, 'isoformat'):  # datetime
+                                    row_dict[f"col_{i}"] = value.isoformat()
+                                elif value is None:
+                                    row_dict[f"col_{i}"] = None
+                                else:
+                                    row_dict[f"col_{i}"] = value
                     rows.append(row_dict)
                 
                 return rows

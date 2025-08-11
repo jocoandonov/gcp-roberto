@@ -373,6 +373,7 @@ def inventory():
         # Get warehouses for filter dropdown
         logger.info("   Fetching warehouses for dropdown...")
         warehouses = analytics_service.get_warehouses()
+        # print('======== warehouses 11===========', warehouses)
         logger.info(f"   ✅ Retrieved {len(warehouses)} warehouses")
 
         # Calculate pagination info

@@ -274,15 +274,15 @@ class AnalyticsService:
             """
 
             result = self.connector.execute_query(query)
-            
+
             # Convert to list of dictionaries with proper keys
             warehouses = []
             for row in result:
                 warehouses.append({
-                    "id": row.get("w_id", row.get("count")),
-                    "name": row.get("w_name", f"Warehouse {row.get('w_id', row.get('count'))}"),
-                    "city": row.get("w_city", "Unknown"),
-                    "state": row.get("w_state", "Unknown")
+                    "w_id": row.get("w_id", row.get("count")),
+                    "w_name": row.get("w_name", f"Warehouse {row.get('w_id', row.get('count'))}"),
+                    "w_city": row.get("w_city", "Unknown"),
+                    "w_state": row.get("w_state", "Unknown")
                 })
 
             return warehouses
