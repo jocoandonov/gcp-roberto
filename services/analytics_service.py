@@ -90,9 +90,6 @@ class AnalyticsService:
 
         try:
             # Test connection first
-            logger.info("🔍 Testing database connection...")
-            print("🔍 Testing database connection...")
-            
             connection_test = self.connector.test_connection()
             if not connection_test:
                 logger.error("❌ Database connection failed")
@@ -116,140 +113,86 @@ class AnalyticsService:
 
             # Get warehouse count
             try:
-                logger.info("🔍 Querying warehouse count...")
-                print("🔍 Querying warehouse count...")
                 result = self.connector.execute_query(
                     "SELECT COUNT(*) as count FROM warehouse"
                 )
                 warehouse_count = result[0]["count"] if result and len(result) > 0 else 0
                 metrics["total_warehouses"] = warehouse_count
-                logger.info(f"✅ Warehouse count: {warehouse_count}")
-                print(f"✅ Warehouse count: {warehouse_count}")
             except Exception as e:
                 logger.warning(f"Failed to get warehouse count: {str(e)}")
-                print(f"❌ Failed to get warehouse count: {str(e)}")
                 metrics["total_warehouses"] = 0
 
             # Get customer count
             try:
-                logger.info("🔍 Querying customer count...")
-                print("🔍 Querying customer count...")
                 result = self.connector.execute_query(
                     "SELECT COUNT(*) as count FROM customer"
                 )
                 customer_count = result[0]["count"] if result and len(result) > 0 else 0
                 metrics["total_customers"] = customer_count
-                logger.info(f"✅ Customer count: {customer_count}")
-                print(f"✅ Customer count: {customer_count}")
             except Exception as e:
                 logger.warning(f"Failed to get customer count: {str(e)}")
-                print(f"❌ Failed to get customer count: {str(e)}")
                 metrics["total_customers"] = 0
 
             # Get order count
             try:
-                logger.info("🔍 Querying order count...")
-                print("🔍 Querying order count...")
                 result = self.connector.execute_query(
                     "SELECT COUNT(*) as count FROM order_table"
                 )
                 order_count = result[0]["count"] if result and len(result) > 0 else 0
                 metrics["total_orders"] = order_count
-                logger.info(f"✅ Order count: {order_count}")
-                print(f"✅ Order count: {order_count}")
             except Exception as e:
                 logger.warning(f"Failed to get order count: {str(e)}")
-                print(f"❌ Failed to get order count: {str(e)}")
                 metrics["total_orders"] = 0
 
             # Get item count
             try:
-                logger.info("🔍 Querying item count...")
-                print("🔍 Querying item count...")
                 result = self.connector.execute_query(
                     "SELECT COUNT(*) as count FROM item"
                 )
                 item_count = result[0]["count"] if result and len(result) > 0 else 0
                 metrics["total_items"] = item_count
-                logger.info(f"✅ Item count: {item_count}")
-                print(f"✅ Item count: {item_count}")
             except Exception as e:
                 logger.warning(f"Failed to get item count: {str(e)}")
-                print(f"❌ Failed to get item count: {str(e)}")
                 metrics["total_items"] = 0
 
             # Get additional metrics for dashboard
             # New orders (orders with o_carrier_id IS NULL)
             try:
-                logger.info("🔍 Querying new orders count...")
-                print("🔍 Querying new orders count...")
                 result = self.connector.execute_query(
                     "SELECT COUNT(*) as count FROM order_table WHERE o_carrier_id IS NULL"
                 )
                 new_orders_count = result[0]["count"] if result and len(result) > 0 else 0
                 metrics["new_orders"] = new_orders_count
-                logger.info(f"✅ New orders count: {new_orders_count}")
-                print(f"✅ New orders count: {new_orders_count}")
             except Exception as e:
                 logger.warning(f"Failed to get new orders count: {str(e)}")
-                print(f"❌ Failed to get new orders count: {str(e)}")
                 metrics["new_orders"] = 0
 
             # Low stock items (stock with quantity < 50)
             try:
-                logger.info("🔍 Querying low stock items count...")
-                print("🔍 Querying low stock items count...")
                 result = self.connector.execute_query(
                     "SELECT COUNT(*) as count FROM stock WHERE s_quantity < 50"
                 )
                 low_stock_count = result[0]["count"] if result and len(result) > 0 else 0
                 metrics["low_stock_items"] = low_stock_count
-                logger.info(f"✅ Low stock items count: {low_stock_count}")
-                print(f"✅ Low stock items count: {low_stock_count}")
             except Exception as e:
                 logger.warning(f"Failed to get low stock items count: {str(e)}")
-                print(f"❌ Failed to get low stock items count: {str(e)}")
                 metrics["low_stock_items"] = 0
 
             # Orders in last 24 hours (simplified - just get recent orders)
             try:
-                logger.info("🔍 Querying recent orders count...")
-                print("🔍 Querying recent orders count...")
                 result = self.connector.execute_query(
                     "SELECT COUNT(*) as count FROM order_table ORDER BY o_entry_d DESC LIMIT 100"
                 )
                 recent_orders_count = result[0]["count"] if result and len(result) > 0 else 0
                 metrics["orders_last_24h"] = recent_orders_count
-                logger.info(f"✅ Recent orders count: {recent_orders_count}")
-                print(f"✅ Recent orders count: {recent_orders_count}")
             except Exception as e:
                 logger.warning(f"Failed to get recent orders count: {str(e)}")
-                print(f"❌ Failed to get recent orders count: {str(e)}")
                 metrics["orders_last_24h"] = 0
 
             # Average order value (simplified)
             metrics["avg_order_value"] = 0.0  # TODO: Implement actual calculation
 
             logger.info("🎉 All dashboard metrics retrieved successfully")
-            print("🎉 All dashboard metrics retrieved successfully")
-            
-            # Display metrics summary
-            print("📊 Dashboard Metrics Summary:")
-            print("-" * 30)
-            for key, value in metrics.items():
-                print(f"   {key}: {value}")
-            print("-" * 30)
-            
-            # Show key business metrics
-            print("🏢 BUSINESS METRICS:")
-            print(f"   • Warehouses: {metrics.get('total_warehouses', 0)}")
-            print(f"   • Customers: {metrics.get('total_customers', 0)}")
-            print(f"   • Orders: {metrics.get('total_orders', 0)}")
-            print(f"   • Items: {metrics.get('total_items', 0)}")
-            print(f"   • New Orders: {metrics.get('new_orders', 0)}")
-            print(f"   • Low Stock: {metrics.get('low_stock_items', 0)}")
-            print(f"   • Recent Orders: {metrics.get('orders_last_24h', 0)}")
-            print(f"   • Avg Order Value: ${metrics.get('avg_order_value', 0.0):.2f}")
             
             return {
                 "success": True,
