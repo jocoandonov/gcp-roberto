@@ -151,7 +151,7 @@ class AnalyticsService:
                 logger.info("🔍 Querying order count...")
                 print("🔍 Querying order count...")
                 result = self.connector.execute_query(
-                    "SELECT COUNT(*) as count FROM orders"
+                    "SELECT COUNT(*) as count FROM order_table"
                 )
                 order_count = result[0]["count"] if result else 0
                 metrics["total_orders"] = order_count
@@ -224,7 +224,7 @@ class AnalyticsService:
 
             query = f"""
                 SELECT o_id, o_w_id, o_d_id, o_c_id, o_entry_d, o_ol_cnt, o_all_local
-                FROM orders 
+                FROM order_table 
                 ORDER BY o_entry_d DESC 
                 LIMIT {limit}
             """

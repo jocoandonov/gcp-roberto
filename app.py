@@ -57,6 +57,11 @@ def initialize_services():
         connection_status = db_connector.test_connection()
         if connection_status:
             print("✅ Initial database connection successful")
+            
+            # Get table counts to verify data access
+            print("📊 Verifying table access...")
+            table_counts = db_connector.get_table_counts()
+            
         else:
             print("❌ Initial database connection failed")
         
@@ -96,7 +101,7 @@ def test_table_connectivity():
         "warehouse",
         "district", 
         "customer",
-        "orders",
+        "order_table",
         "order_line",
         "item",
         "stock"

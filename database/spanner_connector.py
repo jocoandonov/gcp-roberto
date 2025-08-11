@@ -81,16 +81,34 @@ class SpannerConnector(BaseDatabaseConnector):
                 print("❌ No database connection available")
                 return False
             
-            # Execute a simple test query
-            query = "SELECT 1 as test"
-            result = self.execute_query(query)
-            
-            if result and len(result) > 0:
-                print("✅ Spanner connection test successful")
-                return True
-            else:
-                print("❌ Spanner connection test failed - no results")
-                return False
+            # Execute a simple test query using snapshot directly
+            with self.database.snapshot() as snapshot:
+                print("🔍 Executing test query: SELECT 1 as test")
+                results = snapshot.execute_sql("SELECT 1 as test")
+                
+                print(f"🔍 Results type: {type(results)}")
+                print(f"🔍 Results: {results}")
+                
+                if results:
+                    print("✅ Spanner connection test successful")
+                    
+                    # Now test warehouse table count
+                    print("🔍 Testing warehouse table access...")
+                    try:
+                        warehouse_results = snapshot.execute_sql("SELECT COUNT(*) as warehouse_count FROM warehouse")
+                        if warehouse_results:
+                            for row in warehouse_results:
+                                warehouse_count = row[0] if row else 0
+                                print(f"📊 Warehouse table count: {warehouse_count}")
+                        else:
+                            print("❌ Warehouse query returned no results")
+                    except Exception as warehouse_e:
+                        print(f"❌ Warehouse table query failed: {str(warehouse_e)}")
+                    
+                    return True
+                else:
+                    print("❌ Basic test query failed")
+                    return False
                 
         except Exception as e:
             logger.error(f"Spanner connection test failed: {str(e)}")
@@ -104,6 +122,7 @@ class SpannerConnector(BaseDatabaseConnector):
         try:
             if not self.database:
                 logger.error("No database connection available")
+                print("❌ No database connection available")
                 return []
             
             # Execute the query
@@ -114,17 +133,23 @@ class SpannerConnector(BaseDatabaseConnector):
                     results = snapshot.execute_sql(query)
                 
                 # Convert results to list of dictionaries
-                columns = [field.name for field in results.fields]
                 rows = []
                 
                 for row in results:
                     row_dict = {}
-                    for i, value in enumerate(row):
-                        # Handle Spanner-specific data types
-                        if hasattr(value, 'isoformat'):  # datetime
-                            row_dict[columns[i]] = value.isoformat()
-                        else:
-                            row_dict[columns[i]] = value
+                    # For simple queries like COUNT(*), just use the value
+                    if len(row) == 1:
+                        row_dict["count"] = row[0]
+                    else:
+                        # For multi-column queries, we'd need field names
+                        # For now, just use index-based keys
+                        for i, value in enumerate(row):
+                            if hasattr(value, 'isoformat'):  # datetime
+                                row_dict[f"col_{i}"] = value.isoformat()
+                            elif value is None:
+                                row_dict[f"col_{i}"] = None
+                            else:
+                                row_dict[f"col_{i}"] = value
                     rows.append(row_dict)
                 
                 return rows
@@ -132,11 +157,76 @@ class SpannerConnector(BaseDatabaseConnector):
         except Exception as e:
             logger.error(f"Query execution failed: {str(e)}")
             print(f"❌ Query execution failed: {str(e)}")
+            print(f"   Query: {query}")
             return []
 
     def get_provider_name(self) -> str:
         """Get the database provider name"""
         return self.provider_name
+
+    def get_table_counts(self) -> Dict[str, int]:
+        """Get record counts for all major TPC-C tables"""
+        table_counts = {}
+        
+        if not self.database:
+            print("❌ No database connection available for table counts")
+            return table_counts
+        
+        # First, let's discover what tables actually exist
+        print("🔍 Discovering available tables...")
+        try:
+            with self.database.snapshot() as snapshot:
+                # Query to list all tables
+                results = snapshot.execute_sql("""
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = 'public'
+                    ORDER BY table_name
+                """)
+                
+                available_tables = []
+                if results:
+                    for row in results:
+                        available_tables.append(row[0])
+                
+                print(f"📋 Available tables: {', '.join(available_tables)}")
+                
+        except Exception as e:
+            print(f"❌ Could not discover tables: {str(e)}")
+            # Fallback to common TPC-C table names
+            available_tables = [
+                "warehouse", "district", "customer", "order_table", 
+                "order_line", "item", "stock"
+            ]
+        
+        print("📊 Getting table counts...")
+        print("-" * 40)
+        
+        for table in available_tables:
+            try:
+                # Create a new snapshot for each table
+                with self.database.snapshot() as snapshot:
+                    query = f"SELECT COUNT(*) as count FROM {table}"
+                    results = snapshot.execute_sql(query)
+                    
+                    if results:
+                        for row in results:
+                            count = row[0] if row else 0
+                            table_counts[table] = count
+                            print(f"   {table}: {count} records")
+                    else:
+                        table_counts[table] = 0
+                        print(f"   {table}: ❌ Query failed")
+                        
+            except Exception as e:
+                table_counts[table] = 0
+                print(f"   {table}: ❌ Error - {str(e)}")
+        
+        print("-" * 40)
+        total_records = sum(table_counts.values())
+        print(f"📈 Total records across all tables: {total_records}")
+        
+        return table_counts
 
     def close_connection(self):
         """Close database connection"""
