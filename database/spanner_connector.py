@@ -164,6 +164,82 @@ class SpannerConnector(BaseDatabaseConnector):
         """Get the database provider name"""
         return self.provider_name
 
+    def get_payment_history_paginated(
+        self,
+        warehouse_id: Optional[int] = None,
+        district_id: Optional[int] = None,
+        customer_id: Optional[int] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Get payment history with pagination and filtering"""
+        try:
+            # Build the base query
+            query = """
+                SELECT h.h_w_id, h.h_d_id, h.h_c_id, h.h_amount, h.h_date,
+                       c.c_first, c.c_middle, c.c_last,
+                       w.w_name as warehouse_name, d.d_name as district_name
+                FROM history h
+                JOIN customer c ON c.c_w_id = h.h_w_id AND c.c_d_id = h.h_d_id AND c.c_id = h.h_c_id
+                JOIN warehouse w ON w.w_id = h.h_w_id
+                JOIN district d ON d.d_w_id = h.h_w_id AND d.d_id = h.h_d_id
+            """
+            
+            # Build WHERE clause based on filters
+            where_conditions = []
+            params = []
+            
+            if warehouse_id is not None:
+                where_conditions.append("h.h_w_id = %s")
+                params.append(warehouse_id)
+            
+            if district_id is not None:
+                where_conditions.append("h.h_d_id = %s")
+                params.append(district_id)
+            
+            if customer_id is not None:
+                where_conditions.append("h.h_c_id = %s")
+                params.append(customer_id)
+            
+            if where_conditions:
+                query += " WHERE " + " AND ".join(where_conditions)
+            
+            # Get total count for pagination
+            count_query = f"SELECT COUNT(*) as count FROM ({query}) as subquery"
+            count_result = self.execute_query(count_query, tuple(params) if params else None)
+            total_count = count_result[0]["count"] if count_result else 0
+            
+            # Add ORDER BY and LIMIT
+            query += " ORDER BY h.h_date DESC LIMIT %s OFFSET %s"
+            params.extend([limit, offset])
+            
+            # Execute the main query
+            payments = self.execute_query(query, tuple(params) if params else None)
+            
+            # Calculate pagination info
+            has_next = (offset + limit) < total_count
+            has_prev = offset > 0
+            
+            return {
+                "payments": payments,
+                "total_count": total_count,
+                "limit": limit,
+                "offset": offset,
+                "has_next": has_next,
+                "has_prev": has_prev,
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to get payment history paginated: {str(e)}")
+            return {
+                "payments": [],
+                "total_count": 0,
+                "limit": limit,
+                "offset": offset,
+                "has_next": False,
+                "has_prev": False,
+            }
+
     def get_table_counts(self) -> Dict[str, int]:
         """Get record counts for all major TPC-C tables"""
         table_counts = {}

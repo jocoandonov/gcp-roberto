@@ -253,6 +253,44 @@ class AnalyticsService:
                 "orders": [],
             }
 
+    def get_warehouses(self) -> list:
+        """
+        Get list of warehouses for dropdown filters
+
+        Returns:
+            list: List of warehouse dictionaries or empty list if error
+        """
+        if not self.connector:
+            return []
+
+        try:
+            if not self.connector.test_connection():
+                return []
+
+            query = """
+                SELECT w_id, w_name, w_city, w_state
+                FROM warehouse 
+                ORDER BY w_id
+            """
+
+            result = self.connector.execute_query(query)
+            
+            # Convert to list of dictionaries with proper keys
+            warehouses = []
+            for row in result:
+                warehouses.append({
+                    "id": row.get("w_id", row.get("count")),
+                    "name": row.get("w_name", f"Warehouse {row.get('w_id', row.get('count'))}"),
+                    "city": row.get("w_city", "Unknown"),
+                    "state": row.get("w_state", "Unknown")
+                })
+
+            return warehouses
+
+        except Exception as e:
+            logger.error(f"Failed to get warehouses: {str(e)}")
+            return []
+
     def get_inventory(self, limit: int = 10) -> Dict[str, Any]:
         """
         Get inventory data for the study webapp
