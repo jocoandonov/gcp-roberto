@@ -243,8 +243,8 @@ function runAtomicityTest() {
     makeRequest('/api/test/acid/atomicity', 'POST')
         .then(response => {
             displayTestResult(resultDiv, 'Atomicity', response);
-            // Use status field if available, otherwise use success field
-            updateTestSummary('atomicity', response.status || response.success);
+            // Use passed field from ACID tests, fallback to status or success
+            updateTestSummary('atomicity', response.passed || response.status || response.success);
             addToHistory('Atomicity', response);
         })
         .finally(() => {
@@ -265,8 +265,8 @@ function runConsistencyTest() {
     makeRequest('/api/test/acid/consistency', 'POST')
         .then(response => {
             displayTestResult(resultDiv, 'Consistency', response);
-            // Use status field if available, otherwise use success field
-            updateTestSummary('consistency', response.status || response.success);
+            // Use passed field from ACID tests, fallback to status or success
+            updateTestSummary('consistency', response.passed || response.status || response.success);
             addToHistory('Consistency', response);
         })
         .finally(() => {
@@ -287,8 +287,8 @@ function runIsolationTest() {
     makeRequest('/api/test/acid/isolation', 'POST')
         .then(response => {
             displayTestResult(resultDiv, 'Isolation', response);
-            // Use status field if available, otherwise use success field
-            updateTestSummary('isolation', response.status || response.success);
+            // Use passed field from ACID tests, fallback to status or success
+            updateTestSummary('isolation', response.passed || response.status || response.success);
             addToHistory('Isolation', response);
         })
         .finally(() => {
@@ -309,8 +309,8 @@ function runDurabilityTest() {
     makeRequest('/api/test/acid/durability', 'POST')
         .then(response => {
             displayTestResult(resultDiv, 'Durability', response);
-            // Use status field if available, otherwise use success field
-            updateTestSummary('durability', response.status || response.success);
+            // Use passed field from ACID tests, fallback to status or success
+            updateTestSummary('durability', response.passed || response.status || response.success);
             addToHistory('Durability', response);
         })
         .finally(() => {
@@ -349,8 +349,8 @@ async function runAllTests() {
         try {
             const response = await makeRequest(`/api/test/acid/${test.endpoint}`, 'POST');
             displayTestResult(resultDiv, test.name, response);
-            // Use status field if available, otherwise use success field
-            updateTestSummary(test.endpoint, response.status || response.success);
+            // Use passed field from ACID tests, fallback to status or success
+            updateTestSummary(test.endpoint, response.passed || response.status || response.success);
             addToHistory(test.name, response);
         } catch (error) {
             showError(resultDiv, `${test.name} test failed: ${error.message}`);
@@ -371,8 +371,8 @@ async function runAllTests() {
 }
 
 function displayTestResult(resultDiv, testName, response) {
-    // Check if the test passed using either success field or status field
-    const testPassed = response.success === true || response.status === "passed";
+    // Check if the test passed using the 'passed' field from ACID tests
+    const testPassed = response.passed === true || response.success === true || response.status === "passed";
     
     if (testPassed) {
         resultDiv.innerHTML = `
@@ -380,7 +380,7 @@ function displayTestResult(resultDiv, testName, response) {
                 <h6><i class="bi bi-check-circle"></i> ${testName} Test Passed</h6>
                 <p><strong>Result:</strong> ${response.message || response.description || 'Test completed successfully'}</p>
                 ${response.details ? `<p><strong>Details:</strong> ${response.details}</p>` : ''}
-                <p><strong>Duration:</strong> ${response.duration || 'N/A'}</p>
+                <p><strong>Duration:</strong> ${response.elapsed_time ? response.elapsed_time + 's' : 'N/A'}</p>
             </div>
         `;
     } else {
@@ -402,6 +402,7 @@ function updateTestSummary(testType, success) {
     document.getElementById('testResultsSummary').style.display = 'flex';
     
     // Convert string "passed" to boolean true for compatibility
+    // Also handle the 'passed' field from ACID tests
     const testPassed = success === true || success === "passed";
     
     if (testPassed) {
@@ -415,8 +416,8 @@ function updateTestSummary(testType, success) {
 
 function addToHistory(testName, response) {
     const timestamp = new Date().toLocaleString();
-    // Check if the test passed using either success field or status field
-    const testPassed = response.success === true || response.status === "passed";
+    // Check if the test passed using the 'passed' field from ACID tests
+    const testPassed = response.passed === true || response.success === true || response.status === "passed";
     
     testHistory.unshift({
         test: testName,

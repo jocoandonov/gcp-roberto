@@ -115,6 +115,39 @@ class SpannerConnector(BaseDatabaseConnector):
             print(f"❌ Spanner connection test failed: {str(e)}")
             return False
 
+    def execute_ddl(self, ddl_statement: str) -> bool:
+        """
+        Execute DDL statements (CREATE, DROP, ALTER, etc.)
+        
+        Args:
+            ddl_statement: The DDL SQL statement to execute
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info(f"🔧 Executing DDL: {ddl_statement[:100]}...")
+            
+            # For Spanner, DDL operations must go through update_ddl(), not execute_sql()
+            # This requires admin privileges and should be used carefully
+            
+            if not self.database:
+                logger.error("❌ No database connection available for DDL operations")
+                return False
+            
+            # Execute DDL through the proper Spanner method
+            operation = self.database.update_ddl([ddl_statement])
+            
+            # Wait for the operation to complete
+            operation.result()
+            
+            logger.info("✅ DDL executed successfully")
+            return True
+                    
+        except Exception as e:
+            logger.error(f"❌ DDL execution failed: {str(e)}")
+            return False
+
     def execute_query(
         self, query: str, params: Optional[tuple] = None
     ) -> List[Dict[str, Any]]:
