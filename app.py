@@ -841,6 +841,8 @@ def api_test_multi_region_recent_orders():
 
         # Format results
         orders = []
+        current_region = os.environ.get("REGION_NAME", "default")
+        
         for row in results:
             orders.append(
                 {
@@ -853,6 +855,7 @@ def api_test_multi_region_recent_orders():
                     else None,
                     "customer_name": f"{row['c_first']} {row['c_middle']} {row['c_last']}",
                     "status": row["status"],
+                    "region": current_region,  # Add region information
                 }
             )
 

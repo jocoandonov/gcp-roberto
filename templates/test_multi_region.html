@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let html = '<div class="row">';
         
         regionStats.forEach(function(stat) {
-            const isCurrentRegion = stat.region === currentRegion;
+            const isCurrentRegion = stat.warehouse_id == currentRegion || stat.region === currentRegion;
             const cardClass = isCurrentRegion ? 'border-primary' : '';
             const badgeClass = isCurrentRegion ? 'badge-primary' : 'badge-secondary';
             
@@ -285,7 +285,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="card ${cardClass}">
                         <div class="card-body">
                             <h6 class="card-title">
-                                <span class="badge ${badgeClass}">${stat.region}</span>
+                                <span class="badge ${badgeClass}">Warehouse ${stat.warehouse_id}</span>
                                 ${isCurrentRegion ? '<i class="fas fa-map-marker-alt text-primary ml-1" title="Current Region"></i>' : ''}
                             </h6>
                             <p class="card-text">
@@ -327,7 +327,7 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
 
         orders.forEach(function(order) {
-            const isCurrentRegion = order.region_created === currentRegion;
+            const isCurrentRegion = order.region === currentRegion;
             const regionBadgeClass = isCurrentRegion ? 'badge-primary' : 'badge-secondary';
             const statusBadgeClass = order.status === 'New' ? 'badge-warning' : 'badge-success';
             
@@ -339,7 +339,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td>${order.district_id}</td>
                     <td>${order.order_date ? new Date(order.order_date).toLocaleString() : 'N/A'}</td>
                     <td>
-                        <span class="badge ${regionBadgeClass}">${order.region_created}</span>
+                        <span class="badge ${regionBadgeClass}">${order.region || 'Unknown'}</span>
                         ${isCurrentRegion ? '<i class="fas fa-map-marker-alt text-primary ml-1" title="Current Region"></i>' : ''}
                     </td>
                     <td><span class="badge ${statusBadgeClass}">${order.status}</span></td>
