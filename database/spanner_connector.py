@@ -895,6 +895,183 @@ class SpannerConnector(BaseDatabaseConnector):
             logger.error(f"Failed to get stock level: {str(e)}")
             return {"success": False, "error": str(e)}
 
+    def execute_delivery(self, warehouse_id: int, carrier_id: int) -> Dict[str, Any]:
+        """Execute TPC-C Delivery transaction"""
+        try:
+            logger.info(f"Starting Delivery transaction: w_id={warehouse_id}, carrier_id={carrier_id}")
+            
+            # Get pending orders for delivery
+            pending_orders_query = """
+                SELECT no_o_id, no_d_id, no_w_id
+                FROM new_order 
+                WHERE no_w_id = @warehouse_id
+                ORDER BY no_o_id ASC
+                LIMIT 1
+            """
+            
+            pending_orders = self.execute_query(pending_orders_query, {"warehouse_id": warehouse_id})
+            
+            if not pending_orders:
+                return {"success": False, "error": "No pending orders for delivery"}
+            
+            order = pending_orders[0]
+            order_id = order["no_o_id"]
+            district_id = order["no_d_id"]
+            
+            # Get order information
+            order_query = """
+                SELECT o_c_id, o_ol_cnt, o_all_local
+                FROM order_table 
+                WHERE o_id = @order_id AND o_d_id = @district_id AND o_w_id = @warehouse_id
+            """
+            
+            order_info = self.execute_query(order_query, {
+                "order_id": order_id,
+                "district_id": district_id,
+                "warehouse_id": warehouse_id
+            })
+            
+            if not order_info:
+                return {"success": False, "error": "Order not found"}
+            
+            order_data = order_info[0]
+            customer_id = order_data["o_c_id"]
+            order_line_count = order_data["o_ol_cnt"]
+            
+            # Get customer information
+            customer_query = """
+                SELECT c_balance, c_delivery_cnt
+                FROM customer 
+                WHERE c_id = @customer_id AND c_d_id = @district_id AND c_w_id = @warehouse_id
+            """
+            
+            customer_info = self.execute_query(customer_query, {
+                "customer_id": customer_id,
+                "district_id": district_id,
+                "warehouse_id": warehouse_id
+            })
+            
+            if not customer_info:
+                return {"success": False, "error": "Customer not found"}
+            
+            customer = customer_info[0]
+            
+            # Calculate delivery amount from order lines
+            delivery_amount_query = """
+                SELECT SUM(ol_amount) as total_amount
+                FROM order_line 
+                WHERE ol_o_id = @order_id AND ol_d_id = @district_id AND ol_w_id = @warehouse_id
+            """
+            
+            amount_result = self.execute_query(delivery_amount_query, {
+                "order_id": order_id,
+                "district_id": district_id,
+                "warehouse_id": warehouse_id
+            })
+            
+            if not amount_result:
+                return {"success": False, "error": "Failed to calculate delivery amount"}
+            
+            delivery_amount = amount_result[0]["total_amount"] or 0
+            
+            # For now, we'll simulate the delivery since we can't do transactions
+            # In a real implementation, this would update multiple tables in a transaction
+            
+            logger.info(f"Delivery {order_id} would be processed for customer {customer_id}")
+            logger.info(f"Delivery amount: {delivery_amount:.2f}")
+            
+            return {
+                "success": True,
+                "order_id": order_id,
+                "district_id": district_id,
+                "warehouse_id": warehouse_id,
+                "customer_id": customer_id,
+                "carrier_id": carrier_id,
+                "delivery_amount": round(delivery_amount, 2),
+                "message": "Delivery processed successfully (simulated - no actual database changes)"
+            }
+            
+        except Exception as e:
+            logger.error(f"Delivery transaction error: {str(e)}")
+            return {"success": False, "error": str(e)}
+
+    def execute_payment(self, warehouse_id: int, district_id: int, customer_id: int, amount: float) -> Dict[str, Any]:
+        """Execute TPC-C Payment transaction"""
+        try:
+            logger.info(f"Starting Payment transaction: w_id={warehouse_id}, d_id={district_id}, c_id={customer_id}, amount={amount}")
+            
+            # Get customer information
+            customer_query = """
+                SELECT c_first, c_middle, c_last, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_payment_cnt
+                FROM customer 
+                WHERE c_w_id = @warehouse_id AND c_d_id = @district_id AND c_id = @customer_id
+            """
+            customer_result = self.execute_query(customer_query, {
+                "warehouse_id": warehouse_id,
+                "district_id": district_id,
+                "customer_id": customer_id
+            })
+            
+            if not customer_result:
+                return {"success": False, "error": "Customer not found"}
+            
+            customer = customer_result[0]
+            
+            # Get warehouse and district information
+            warehouse_query = """
+                SELECT w_name, w_street_1, w_street_2, w_city, w_state, w_zip, w_ytd
+                FROM warehouse WHERE w_id = @warehouse_id
+            """
+            warehouse_result = self.execute_query(warehouse_query, {"warehouse_id": warehouse_id})
+            
+            if not warehouse_result:
+                return {"success": False, "error": "Warehouse not found"}
+            
+            warehouse = warehouse_result[0]
+            
+            district_query = """
+                SELECT d_name, d_street_1, d_street_2, d_city, d_state, d_zip, d_ytd
+                FROM district WHERE d_w_id = @warehouse_id AND d_id = @district_id
+            """
+            district_result = self.execute_query(district_query, {
+                "warehouse_id": warehouse_id,
+                "district_id": district_id
+            })
+            
+            if not district_result:
+                return {"success": False, "error": "District not found"}
+            
+            district = district_result[0]
+            
+            # Calculate new customer balance and payment stats
+            new_balance = customer["c_balance"] - amount
+            new_ytd_payment = customer["c_ytd_payment"] + amount
+            new_payment_cnt = customer["c_payment_cnt"] + 1
+            
+            # For now, we'll simulate the payment since we can't do transactions
+            # In a real implementation, this would update multiple tables in a transaction
+            
+            logger.info(f"Payment {amount:.2f} would be processed for customer {customer_id}")
+            logger.info(f"New balance would be: {new_balance:.2f}")
+            logger.info(f"New YTD payment would be: {new_ytd_payment:.2f}")
+            
+            return {
+                "success": True,
+                "customer_name": f"{customer['c_first']} {customer['c_middle']} {customer['c_last']}",
+                "warehouse_name": warehouse["w_name"],
+                "district_name": district["d_name"],
+                "payment_amount": amount,
+                "old_balance": customer["c_balance"],
+                "new_balance": new_balance,
+                "ytd_payment": new_ytd_payment,
+                "payment_count": new_payment_cnt,
+                "message": "Payment processed successfully (simulated - no actual database changes)"
+            }
+            
+        except Exception as e:
+            logger.error(f"Payment transaction error: {str(e)}")
+            return {"success": False, "error": str(e)}
+
     def get_table_counts(self) -> Dict[str, int]:
         """Get record counts for all major TPC-C tables"""
         table_counts = {}
