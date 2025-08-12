@@ -181,7 +181,7 @@ class AnalyticsService:
             # Orders in last 24 hours (simplified - just get recent orders)
             try:
                 result = self.connector.execute_query(
-                    "SELECT COUNT(*) as count FROM order_table ORDER BY o_entry_d DESC LIMIT 100"
+                    "SELECT COUNT(*) as count FROM order_table"
                 )
                 recent_orders_count = result[0]["count"] if result and len(result) > 0 else 0
                 metrics["orders_last_24h"] = recent_orders_count
@@ -189,8 +189,129 @@ class AnalyticsService:
                 logger.warning(f"Failed to get recent orders count: {str(e)}")
                 metrics["orders_last_24h"] = 0
 
-            # Average order value (simplified)
-            metrics["avg_order_value"] = 0.0  # TODO: Implement actual calculation
+            # Average order value (actual calculation)
+            try:
+                # Get total order value by summing order_line amounts
+                order_value_result = self.connector.execute_query("""
+                    SELECT COALESCE(SUM(ol.ol_amount), 0) as total_order_value
+                    FROM order_line ol
+                    JOIN order_table o ON o.o_id = ol.ol_o_id 
+                        AND o.o_w_id = ol.ol_w_id 
+                        AND o.o_d_id = ol.ol_d_id
+                """)
+                
+                total_order_value = order_value_result[0]["total_order_value"] if order_value_result and len(order_value_result) > 0 else 0
+                
+                # Get total number of orders
+                order_count_result = self.connector.execute_query("SELECT COUNT(*) as order_count FROM order_table")
+                total_orders = order_count_result[0]["order_count"] if order_count_result and len(order_count_result) > 0 else 0
+                
+                # Calculate average order value
+                if total_orders > 0:
+                    metrics["avg_order_value"] = round(total_order_value / total_orders, 2)
+                else:
+                    metrics["avg_order_value"] = 0.0
+                    
+                # Store total revenue for other calculations
+                metrics["total_revenue"] = round(total_order_value, 2)
+                    
+                logger.info(f"   Calculated average order value: ${metrics['avg_order_value']:.2f} from {total_orders} orders")
+                
+            except Exception as e:
+                logger.warning(f"Failed to calculate average order value: {str(e)}")
+                metrics["avg_order_value"] = 0.0
+                metrics["total_revenue"] = 0.0
+
+            # Average customer order count
+            try:
+                if metrics.get("total_customers", 0) > 0:
+                    metrics["avg_customer_orders"] = round(metrics["total_orders"] / metrics["total_customers"], 2)
+                else:
+                    metrics["avg_customer_orders"] = 0.0
+                logger.info(f"   Calculated average customer orders: {metrics['avg_customer_orders']:.2f}")
+            except Exception as e:
+                logger.warning(f"Failed to calculate average customer orders: {str(e)}")
+                metrics["avg_customer_orders"] = 0.0
+
+            # Total stock value
+            try:
+                stock_value_result = self.connector.execute_query("""
+                    SELECT COALESCE(SUM(s.s_quantity * i.i_price), 0) as total_stock_value
+                    FROM stock s
+                    JOIN item i ON i.i_id = s.s_i_id
+                """)
+                
+                total_stock_value = stock_value_result[0]["total_stock_value"] if stock_value_result and len(stock_value_result) > 0 else 0
+                metrics["total_stock_value"] = round(total_stock_value, 2)
+                logger.info(f"   Calculated total stock value: ${metrics['total_stock_value']:.2f}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to calculate total stock value: {str(e)}")
+                metrics["total_stock_value"] = 0.0
+
+            # Payment metrics
+            try:
+                payment_result = self.connector.execute_query("""
+                    SELECT COUNT(*) as payment_count, COALESCE(SUM(h_amount), 0) as total_payments
+                    FROM history
+                """)
+                
+                if payment_result and len(payment_result) > 0:
+                    payment_count = payment_result[0]["payment_count"]
+                    total_payments = payment_result[0]["total_payments"]
+                    
+                    metrics["total_payments"] = payment_count
+                    metrics["total_payment_amount"] = round(total_payments, 2)
+                    
+                    # Calculate average payment amount
+                    if payment_count > 0:
+                        metrics["avg_payment_amount"] = round(total_payments / payment_count, 2)
+                    else:
+                        metrics["avg_payment_amount"] = 0.0
+                        
+                    logger.info(f"   Calculated payment metrics: {payment_count} payments, avg: ${metrics['avg_payment_amount']:.2f}")
+                else:
+                    metrics["total_payments"] = 0
+                    metrics["total_payment_amount"] = 0.0
+                    metrics["avg_payment_amount"] = 0.0
+                    
+            except Exception as e:
+                logger.warning(f"Failed to calculate payment metrics: {str(e)}")
+                metrics["total_payments"] = 0
+                metrics["total_payment_amount"] = 0.0
+                metrics["avg_payment_amount"] = 0.0
+
+            # Customer activity metrics
+            try:
+                customer_activity_result = self.connector.execute_query("""
+                    SELECT 
+                        COUNT(DISTINCT c.c_id) as active_customers,
+                        COUNT(DISTINCT o.o_c_id) as customers_with_orders
+                    FROM customer c
+                    LEFT JOIN order_table o ON c.c_id = o.o_c_id AND c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id
+                """)
+                
+                if customer_activity_result and len(customer_activity_result) > 0:
+                    total_customers = customer_activity_result[0]["active_customers"]
+                    customers_with_orders = customer_activity_result[0]["customers_with_orders"]
+                    
+                    metrics["customers_with_orders"] = customers_with_orders
+                    
+                    # Calculate customer activity percentage
+                    if total_customers > 0:
+                        metrics["customer_activity_rate"] = round((customers_with_orders / total_customers) * 100, 1)
+                    else:
+                        metrics["customer_activity_rate"] = 0.0
+                        
+                    logger.info(f"   Calculated customer activity: {customers_with_orders}/{total_customers} ({metrics['customer_activity_rate']:.1f}%)")
+                else:
+                    metrics["customers_with_orders"] = 0
+                    metrics["customer_activity_rate"] = 0.0
+                    
+            except Exception as e:
+                logger.warning(f"Failed to calculate customer activity metrics: {str(e)}")
+                metrics["customers_with_orders"] = 0
+                metrics["customer_activity_rate"] = 0.0
 
             logger.info("🎉 All dashboard metrics retrieved successfully")
             
@@ -228,14 +349,14 @@ class AnalyticsService:
             if not self.connector.test_connection():
                 return {"error": "Database connection failed", "orders": []}
 
-            query = f"""
+            query = """
                 SELECT o_id, o_w_id, o_d_id, o_c_id, o_entry_d, o_ol_cnt, o_all_local
                 FROM order_table 
                 ORDER BY o_entry_d DESC 
-                LIMIT {limit}
+                LIMIT %s
             """
 
-            result = self.connector.execute_query(query)
+            result = self.connector.execute_query(query, [limit])
 
             return {
                 "success": True,
@@ -308,16 +429,16 @@ class AnalyticsService:
             if not self.connector.test_connection():
                 return {"error": "Database connection failed", "inventory": []}
 
-            query = f"""
+            query = """
                 SELECT s.s_i_id, i.i_name, s.s_w_id, s.s_quantity, i.i_price
                 FROM stock s
                 JOIN item i ON s.s_i_id = i.i_id
                 WHERE s.s_quantity < 50
                 ORDER BY s.s_quantity ASC
-                LIMIT {limit}
+                LIMIT %s
             """
 
-            result = self.connector.execute_query(query)
+            result = self.connector.execute_query(query, [limit])
 
             return {
                 "success": True,
@@ -346,6 +467,14 @@ class AnalyticsService:
             "low_stock_items": 0,
             "orders_last_24h": 0,
             "avg_order_value": 0.0,
+            "total_revenue": 0.0,
+            "avg_customer_orders": 0.0,
+            "total_stock_value": 0.0,
+            "total_payments": 0,
+            "total_payment_amount": 0.0,
+            "avg_payment_amount": 0.0,
+            "customers_with_orders": 0,
+            "customer_activity_rate": 0.0,
         }
 
     def close(self):
