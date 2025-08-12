@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let html = '<div class="row">';
         
         regionStats.forEach(function(stat) {
-            const isCurrentRegion = stat.warehouse_id == currentRegion || stat.region === currentRegion;
+            const isCurrentRegion = stat.region_name === currentRegion;
             const cardClass = isCurrentRegion ? 'border-primary' : '';
             const badgeClass = isCurrentRegion ? 'badge-primary' : 'badge-secondary';
             
@@ -285,7 +285,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="card ${cardClass}">
                         <div class="card-body">
                             <h6 class="card-title">
-                                <span class="badge ${badgeClass}">Warehouse ${stat.warehouse_id}</span>
+                                <span class="badge ${badgeClass}">${stat.region_name}</span>
                                 ${isCurrentRegion ? '<i class="fas fa-map-marker-alt text-primary ml-1" title="Current Region"></i>' : ''}
                             </h6>
                             <p class="card-text">
