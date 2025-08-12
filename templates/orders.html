@@ -346,11 +346,14 @@
 <script>
 // Debug logging for template variables
 console.log('🔍 Orders Template Debug Info:');
+console.log('🔍 ========================================');
 
 // Safely log orders data
 try {
     const ordersData = {{ orders|tojson|safe }};
-    console.log('Orders:', ordersData);
+    console.log('📋 Orders Data:', ordersData);
+    console.log('📋 Orders Type:', typeof ordersData);
+    console.log('📋 Orders Length:', Array.isArray(ordersData) ? ordersData.length : 'Not an array');
     
     if (ordersData === null) {
         console.error('❌ Orders is null!');
@@ -359,7 +362,8 @@ try {
     } else if (Array.isArray(ordersData)) {
         console.log(`✅ Orders is an array with ${ordersData.length} items`);
         if (ordersData.length > 0) {
-            console.log('First order sample:', ordersData[0]);
+            console.log('📋 First order sample:', ordersData[0]);
+            console.log('📋 Order keys:', Object.keys(ordersData[0]));
         }
     } else {
         console.warn('⚠️ Orders is not an array:', typeof ordersData, ordersData);
@@ -370,9 +374,9 @@ try {
 
 // Safely log other template variables
 try {
-    console.log('Warehouses:', {{ warehouses|tojson|safe }});
-    console.log('Pagination:', {{ pagination|tojson|safe }});
-    console.log('Filters:', {{ filters|tojson|safe }});
+    console.log('🏢 Warehouses:', {{ warehouses|tojson|safe }});
+    console.log('📄 Pagination:', {{ pagination|tojson|safe }});
+    console.log('🔍 Filters:', {{ filters|tojson|safe }});
 } catch (error) {
     console.error('❌ Error logging other template variables:', error);
 }
@@ -380,6 +384,7 @@ try {
 // Additional debugging info
 console.log('🔍 Template rendering completed');
 console.log('🔍 Check for any JavaScript errors above');
+console.log('🔍 ========================================');
 
 function addOrderItem() {
     const itemsContainer = document.getElementById('orderItems');
