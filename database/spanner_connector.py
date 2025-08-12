@@ -462,6 +462,133 @@ class SpannerConnector(BaseDatabaseConnector):
                 "has_prev": False,
             }
 
+    def get_order_status(
+        self, warehouse_id: int, district_id: int, customer_id: int
+    ) -> Dict[str, Any]:
+        """Get order status for a customer"""
+        try:
+            # Query to get order status information
+            query = """
+                SELECT o.o_id, o.o_w_id, o.o_d_id, o.o_c_id, o.o_entry_d, o.o_carrier_id,
+                       c.c_first, c.c_middle, c.c_last, c.c_balance,
+                       CASE WHEN no.no_o_id IS NOT NULL THEN 'New' ELSE 'Delivered' END as status
+                FROM order_table o
+                JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id
+                LEFT JOIN new_order no ON no.no_w_id = o.o_w_id AND no.no_d_id = o.o_d_id AND no.no_o_id = o.o_id
+                WHERE o.o_w_id = $1 AND o.o_d_id = $2 AND o.o_c_id = $3
+                ORDER BY o.o_entry_d DESC
+                LIMIT 1
+            """
+            
+            params = {"p1": warehouse_id, "p2": district_id, "p3": customer_id}
+            param_types = {
+                "p1": spanner.param_types.INT64,
+                "p2": spanner.param_types.INT64,
+                "p3": spanner.param_types.INT64
+            }
+            
+            # First snapshot for order data
+            with self.database.snapshot() as snapshot:
+                results = snapshot.execute_sql(query, params=params, param_types=param_types)
+                
+                if not results:
+                    return {"success": False, "error": "Order not found"}
+                
+                # Get the first (most recent) order - handle Spanner results properly
+                order_row = None
+                for row in results:
+                    order_row = row
+                    break
+                
+                if not order_row:
+                    return {"success": False, "error": "Order not found"}
+                
+                # Get column names from results metadata
+                if hasattr(results, 'fields') and results.fields:
+                    column_names = [field.name for field in results.fields]
+                else:
+                    # Fallback column names if metadata not available
+                    column_names = ['o_id', 'o_w_id', 'o_d_id', 'o_c_id', 'o_entry_d', 'o_carrier_id', 
+                                  'c_first', 'c_middle', 'c_last', 'c_balance', 'status']
+                
+                # Convert row to dictionary for safer access
+                order_data = {}
+                for i, value in enumerate(order_row):
+                    if i < len(column_names):
+                        col_name = column_names[i]
+                        if hasattr(value, 'isoformat'):  # datetime
+                            order_data[col_name] = value.isoformat()
+                        elif value is None:
+                            order_data[col_name] = None
+                        else:
+                            order_data[col_name] = value
+                
+                # Extract order information using dictionary keys
+                order_id = order_data.get('o_id')
+                order_date = order_data.get('o_entry_d')
+                carrier_id = order_data.get('o_carrier_id')
+                customer_name = f"{order_data.get('c_first', '')} {order_data.get('c_middle', '')} {order_data.get('c_last', '')}".strip()
+                customer_balance = order_data.get('c_balance')
+                status = order_data.get('status')
+                
+                if not order_id:
+                    return {"success": False, "error": "Invalid order data structure"}
+            
+            # Second snapshot for order lines (separate from the first one)
+            order_lines_query = """
+                SELECT ol.ol_i_id, ol.ol_quantity, ol.ol_amount, ol.ol_supply_w_id, ol.ol_delivery_d,
+                       i.i_name
+                FROM order_line ol
+                JOIN item i ON i.i_id = ol.ol_i_id
+                WHERE ol.ol_w_id = $1 AND ol.ol_d_id = $2 AND ol.ol_o_id = $3
+                ORDER BY ol.ol_number
+            """
+            
+            order_lines_params = {"p1": warehouse_id, "p2": district_id, "p3": order_id}
+            order_lines_param_types = {
+                "p1": spanner.param_types.INT64,
+                "p2": spanner.param_types.INT64,
+                "p3": spanner.param_types.INT64
+            }
+            
+            # Use a separate snapshot for order lines query
+            with self.database.snapshot() as order_lines_snapshot:
+                order_lines_results = order_lines_snapshot.execute_sql(order_lines_query, params=order_lines_params, param_types=order_lines_param_types)
+                
+                # Convert order lines to list of dictionaries
+                order_lines = []
+                if hasattr(order_lines_results, 'fields') and order_lines_results.fields:
+                    line_column_names = [field.name for field in order_lines_results.fields]
+                else:
+                    line_column_names = ['ol_i_id', 'ol_quantity', 'ol_amount', 'ol_supply_w_id', 'ol_delivery_d', 'i_name']
+                
+                for row in order_lines_results:
+                    line_dict = {}
+                    for i, value in enumerate(row):
+                        col_name = line_column_names[i] if i < len(line_column_names) else f"col_{i}"
+                        if hasattr(value, 'isoformat'):  # datetime
+                            line_dict[col_name] = value.isoformat()
+                        elif value is None:
+                            line_dict[col_name] = None
+                        else:
+                            line_dict[col_name] = value
+                    order_lines.append(line_dict)
+            
+            return {
+                "success": True,
+                "order_id": order_id,
+                "order_date": order_date,
+                "carrier_id": carrier_id,
+                "customer_name": customer_name,
+                "customer_balance": customer_balance,
+                "order_line_count": len(order_lines),
+                "order_lines": order_lines
+            }
+                
+        except Exception as e:
+            logger.error(f"Failed to get order status: {str(e)}")
+            return {"success": False, "error": str(e)}
+
     def get_table_counts(self) -> Dict[str, int]:
         """Get record counts for all major TPC-C tables"""
         table_counts = {}
