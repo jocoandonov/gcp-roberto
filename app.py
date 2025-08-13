@@ -691,11 +691,14 @@ def test_multi_region():
 def api_test_acid(test_type: str):
     """Execute ACID compliance tests"""
     try:
-        
-        from tests.acid_tests import ACIDTests
+        # Import at function level to handle production deployment
+        try:
+            from tests.acid_tests import ACIDTests
+        except ImportError as e:
+            logger.error(f"Failed to import ACID tests: {str(e)}")
+            return jsonify({"error": "ACID test module not available in production"}), 500
         
         # Initialize ACID tests
-        from tests.acid_tests import ACIDTests
         acid_tests = ACIDTests(db_connector)
         logger.info(f"✅ ACID tests initialized for {acid_tests.provider_name}")
 

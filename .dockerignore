@@ -55,9 +55,9 @@ Dockerfile
 *.md
 materials/
 
-# Tests
-tests/
-test_*.py
+# Tests (keeping for production deployment)
+# tests/
+# test_*.py
 
 # Logs
 *.log
